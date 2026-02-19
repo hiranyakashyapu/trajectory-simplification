@@ -1,0 +1,2 @@
+# Trajectory simplification algorithms
+

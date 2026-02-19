@@ -1,0 +1,335 @@
+"""
+PHASE 6: Visualization Code
+
+This module generates all plots for the project:
+- Original vs simplified trajectories
+- Compression vs error curves
+- Runtime vs size
+- Metric comparison charts
+"""
+
+import sys
+import pickle
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+from typing import List, Dict
+
+# Add parent directory to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+from src.algorithms.baseline_algorithms import simplify_with_budget
+from src.algorithms.proposed_method import proposed_simplification
+
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (12, 8)
+plt.rcParams['font.size'] = 10
+
+
+def plot_trajectory_comparison(trajectory: pd.DataFrame,
+                               algorithms: List[str],
+                               compression_ratio: float,
+                               output_path: str = None):
+    """
+    Plot original vs simplified trajectories for multiple algorithms.
+    
+    Args:
+        trajectory: Original trajectory DataFrame
+        algorithms: List of algorithm names to compare
+        compression_ratio: Compression ratio to use
+        output_path: Path to save figure
+    """
+    budget = max(2, int(len(trajectory) / compression_ratio))
+    
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes = axes.flatten()
+    
+    # Plot original
+    ax = axes[0]
+    ax.plot(trajectory['lon'], trajectory['lat'], 'b-', linewidth=2, alpha=0.7, label='Original')
+    ax.scatter(trajectory['lon'].iloc[0], trajectory['lat'].iloc[0], 
+              color='green', s=100, marker='o', label='Start', zorder=5)
+    ax.scatter(trajectory['lon'].iloc[-1], trajectory['lat'].iloc[-1], 
+              color='red', s=100, marker='s', label='End', zorder=5)
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.set_title(f'Original Trajectory\n({len(trajectory)} points)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot each algorithm
+    algorithm_names = {
+        'rdp': 'Douglas-Peucker',
+        'sliding_window': 'Sliding Window',
+        'uniform': 'Uniform Sampling',
+        'adaptive': 'Adaptive Threshold',
+        'proposed': 'Proposed Method'
+    }
+    
+    for idx, algorithm in enumerate(algorithms[:5], 1):
+        ax = axes[idx]
+        
+        try:
+            if algorithm == 'proposed':
+                simplified, indices = proposed_simplification(trajectory, budget)
+            else:
+                simplified = simplify_with_budget(trajectory, algorithm, budget)
+                indices = None
+            
+            ax.plot(trajectory['lon'], trajectory['lat'], 'lightgray', 
+                   linewidth=1, alpha=0.3, label='Original')
+            ax.plot(simplified[:, 1], simplified[:, 0], 'r-', 
+                   linewidth=2, alpha=0.8, label='Simplified')
+            ax.scatter(simplified[:, 1], simplified[:, 0], 
+                      color='red', s=50, marker='o', zorder=5)
+            ax.scatter(trajectory['lon'].iloc[0], trajectory['lat'].iloc[0], 
+                      color='green', s=100, marker='o', zorder=6)
+            ax.scatter(trajectory['lon'].iloc[-1], trajectory['lat'].iloc[-1], 
+                      color='blue', s=100, marker='s', zorder=6)
+            
+            ax.set_xlabel('Longitude')
+            ax.set_ylabel('Latitude')
+            ax.set_title(f'{algorithm_names.get(algorithm, algorithm)}\n({len(simplified)} points)')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+        except Exception as e:
+            ax.text(0.5, 0.5, f'Error: {str(e)}', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(f'{algorithm_names.get(algorithm, algorithm)}\n(Error)')
+    
+    # Hide unused subplots
+    for idx in range(len(algorithms) + 1, len(axes)):
+        axes[idx].axis('off')
+    
+    plt.tight_layout()
+    
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Saved trajectory comparison to {output_path}")
+    
+    plt.show()
+
+
+def plot_compression_error_curves(results_df: pd.DataFrame,
+                                 output_path: str = None):
+    """
+    Plot compression ratio vs error curves for different algorithms.
+    
+    Args:
+        results_df: Results DataFrame from experiments
+        output_path: Path to save figure
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    metrics = [
+        ('hausdorff_distance', 'Hausdorff Distance (m)'),
+        ('average_pte', 'Average PTE (m)'),
+        ('frechet_distance', 'Frechet Distance (m)'),
+        ('runtime_seconds', 'Runtime (seconds)')
+    ]
+    
+    for idx, (metric, ylabel) in enumerate(metrics):
+        ax = axes[idx // 2, idx % 2]
+        
+        for algorithm in results_df['algorithm'].unique():
+            algo_data = results_df[results_df['algorithm'] == algorithm]
+            grouped = algo_data.groupby('compression_ratio')[metric].agg(['mean', 'std'])
+            
+            ax.errorbar(grouped.index, grouped['mean'], 
+                       yerr=grouped['std'], 
+                       label=algorithm, marker='o', linewidth=2, capsize=5)
+        
+        ax.set_xlabel('Compression Ratio')
+        ax.set_ylabel(ylabel)
+        ax.set_title(f'{ylabel} vs Compression Ratio')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_xscale('log')
+        if metric != 'runtime_seconds':
+            ax.set_yscale('log')
+    
+    plt.tight_layout()
+    
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Saved compression-error curves to {output_path}")
+    
+    plt.show()
+
+
+def plot_runtime_scalability(results_df: pd.DataFrame,
+                            output_path: str = None):
+    """
+    Plot runtime vs trajectory size for scalability analysis.
+    
+    Args:
+        results_df: Results DataFrame
+        output_path: Path to save figure
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    
+    for algorithm in results_df['algorithm'].unique():
+        algo_data = results_df[results_df['algorithm'] == algorithm]
+        
+        # Group by trajectory size
+        grouped = algo_data.groupby('trajectory_size')['runtime_seconds'].agg(['mean', 'std'])
+        
+        ax.errorbar(grouped.index, grouped['mean'],
+                   yerr=grouped['std'],
+                   label=algorithm, marker='o', linewidth=2, capsize=5)
+    
+    ax.set_xlabel('Trajectory Size (points)')
+    ax.set_ylabel('Runtime (seconds)')
+    ax.set_title('Runtime Scalability')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    
+    plt.tight_layout()
+    
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Saved runtime scalability plot to {output_path}")
+    
+    plt.show()
+
+
+def plot_metric_comparison(results_df: pd.DataFrame,
+                          compression_ratio: float,
+                          output_path: str = None):
+    """
+    Plot metric comparison bar chart for different algorithms.
+    
+    Args:
+        results_df: Results DataFrame
+        compression_ratio: Specific compression ratio to compare
+        output_path: Path to save figure
+    """
+    # Filter by compression ratio
+    filtered = results_df[results_df['compression_ratio'] == compression_ratio]
+    
+    # Select metrics to compare
+    metrics = ['hausdorff_distance', 'average_pte', 'frechet_distance',
+               'turn_preservation', 'stop_preservation']
+    
+    # Filter to available metrics
+    available_metrics = [m for m in metrics if m in filtered.columns]
+    
+    fig, axes = plt.subplots(1, len(available_metrics), figsize=(5*len(available_metrics), 6))
+    
+    if len(available_metrics) == 1:
+        axes = [axes]
+    
+    for idx, metric in enumerate(available_metrics):
+        ax = axes[idx]
+        
+        grouped = filtered.groupby('algorithm')[metric].agg(['mean', 'std'])
+        
+        x_pos = np.arange(len(grouped))
+        ax.bar(x_pos, grouped['mean'], yerr=grouped['std'], 
+              capsize=5, alpha=0.7, edgecolor='black')
+        
+        ax.set_xlabel('Algorithm')
+        ax.set_ylabel(metric.replace('_', ' ').title())
+        ax.set_title(f'{metric.replace("_", " ").title()}\n(Compression: {compression_ratio}x)')
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(grouped.index, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Saved metric comparison to {output_path}")
+    
+    plt.show()
+
+
+def generate_all_plots(results_file: str = "results/experiment_results.csv",
+                      trajectories_file: str = "data/processed/trajectories.pkl",
+                      output_dir: str = "results/figures"):
+    """
+    Generate all plots for the project.
+    
+    Args:
+        results_file: Path to experiment results CSV
+        trajectories_file: Path to trajectories pickle file
+        output_dir: Directory to save plots
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Load data
+    print("Loading data...")
+    results_df = pd.read_csv(results_file)
+    
+    with open(trajectories_file, 'rb') as f:
+        trajectories = pickle.load(f)
+    
+    print(f"Loaded {len(trajectories)} trajectories and {len(results_df)} experiment results")
+    
+    # Generate plots
+    print("\nGenerating plots...")
+    
+    # 1. Trajectory comparison
+    print("1. Trajectory comparison...")
+    sample_traj = trajectories[0]
+    plot_trajectory_comparison(
+        sample_traj,
+        ['rdp', 'sliding_window', 'uniform', 'adaptive', 'proposed'],
+        compression_ratio=5.0,
+        output_path=str(output_dir / "trajectory_comparison.png")
+    )
+    
+    # 2. Compression-error curves
+    print("2. Compression-error curves...")
+    plot_compression_error_curves(
+        results_df,
+        output_path=str(output_dir / "compression_error_curves.png")
+    )
+    
+    # 3. Runtime scalability
+    print("3. Runtime scalability...")
+    plot_runtime_scalability(
+        results_df,
+        output_path=str(output_dir / "runtime_scalability.png")
+    )
+    
+    # 4. Metric comparison
+    print("4. Metric comparison...")
+    for comp_ratio in [5.0, 10.0]:
+        plot_metric_comparison(
+            results_df,
+            compression_ratio=comp_ratio,
+            output_path=str(output_dir / f"metric_comparison_{comp_ratio}x.png")
+        )
+    
+    print(f"\nAll plots saved to {output_dir}")
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Generate visualization plots')
+    parser.add_argument('--results-file', type=str,
+                       default='results/experiment_results.csv',
+                       help='Path to experiment results CSV')
+    parser.add_argument('--trajectories-file', type=str,
+                       default='data/processed/trajectories.pkl',
+                       help='Path to trajectories pickle file')
+    parser.add_argument('--output-dir', type=str,
+                       default='results/figures',
+                       help='Directory to save plots')
+    
+    args = parser.parse_args()
+    
+    generate_all_plots(
+        results_file=args.results_file,
+        trajectories_file=args.trajectories_file,
+        output_dir=args.output_dir
+    )
+
