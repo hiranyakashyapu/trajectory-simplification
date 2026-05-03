@@ -2,17 +2,19 @@
 
 ## 7.1 Geometric Quality Results
 
+Naming used in this chapter: Douglas-Peucker (**DP**), Sliding Window (**SW**), Uniform Sampling (**US**), and Adaptive Threshold (**AT**).
+
 ### 7.1.1 Hausdorff Distance
 
 The Hausdorff distance measures the maximum distance between trajectories, providing a worst-case error bound. Our results show significant variation across algorithms.
 
 **Key Findings**:
 - **Uniform sampling achieves the best geometric quality** (101.18m mean Hausdorff distance), as it preserves the overall trajectory shape through regular sampling
-- **Proposed method has moderate geometric error** (273.37m mean), which is 2.7x higher than uniform but **2.3x better than RDP** (629.47m)
-- **RDP's high error** (629.47m) is partly explained by its tendency to produce very few points (often 3-6 points) due to binary search constraints, leading to extreme compression
+- **Proposed method has moderate geometric error** (273.37m mean), which is 2.7x higher than uniform but **2.3x better than DP** (629.47m)
+- **DP's high error** (629.47m) is partly explained by its tendency to produce very few points (often 3-6 points) due to binary search constraints, leading to extreme compression
 - **Adaptive and Sliding Window** perform similarly (182.45m and 221.57m respectively), with adaptive slightly better due to speed-aware threshold adjustment
 
-**Interpretation**: The proposed method sacrifices some geometric accuracy (compared to uniform sampling) to preserve semantic features. However, the geometric error (273m) remains acceptable for GPS applications, where typical GPS accuracy is 5-10 meters. The 2.3x improvement over RDP demonstrates that semantic-aware selection can achieve better geometric quality than pure geometric methods in some cases.
+**Interpretation**: The proposed method sacrifices some geometric accuracy (compared to uniform sampling) to preserve semantic features. However, the geometric error (273m) remains acceptable for GPS applications, where typical GPS accuracy is 5-10 meters. The 2.3x improvement over DP demonstrates that semantic-aware selection can achieve better geometric quality than pure geometric methods in some cases.
 
 ### 7.1.2 Average Point-to-Trajectory Error (APTE)
 
@@ -22,7 +24,7 @@ APTE measures the average distance from original points to the simplified trajec
 - **Adaptive method achieves the lowest APTE** (0.02m), followed closely by Sliding Window (0.01m), indicating excellent average geometric preservation
 - **Uniform sampling has moderate APTE** (0.65m), which is higher than adaptive/sliding window but still very good
 - **Proposed method has higher APTE** (3.52m), reflecting its prioritization of semantic features over pure geometric accuracy
-- **RDP often produces only endpoints**, making APTE calculation less meaningful
+- **DP often produces only endpoints**, making APTE calculation less meaningful
 
 **Comparison with Hausdorff**: The APTE values are much lower than Hausdorff distances for all methods, indicating that while worst-case errors can be large, average errors are generally small. The proposed method's APTE (3.52m) is still within acceptable bounds for GPS applications.
 
@@ -36,7 +38,7 @@ Frechet distance considers the order of points, making it more suitable for traj
 - **Uniform sampling achieves the best Frechet distance** (140.99m), maintaining good order-aware similarity
 - **Adaptive method** (258.79m) and **Sliding Window** (302.87m) perform similarly, with adaptive slightly better
 - **Proposed method** (370.13m) has higher Frechet distance, reflecting its focus on semantic features rather than strict point ordering
-- **RDP** produces very high Frechet distances due to extreme compression (often only 3-6 points)
+- **DP** produces very high Frechet distances due to extreme compression (often only 3-6 points)
 
 **Order-Aware Insights**: The Frechet distances are generally lower than Hausdorff distances for most methods, indicating that point ordering is reasonably preserved. The proposed method's higher Frechet distance (370m vs 140m for uniform) is expected, as it may reorder points to preserve semantic features.
 
@@ -56,7 +58,7 @@ Turn preservation measures how well direction changes (turns) in the original tr
 
 **Why This Matters**: Turns represent critical decision points in trajectories (e.g., route changes, navigation events). Preserving 72% of turns on average means that most important direction changes are maintained, which is crucial for applications like route analysis, navigation, and trajectory understanding.
 
-**Comparison with Baselines**: Baseline algorithms (RDP, Sliding Window, Uniform, Adaptive) do not explicitly preserve turns. While they may coincidentally preserve some turns through geometric selection, they have no mechanism to ensure turn preservation. The proposed method's explicit turn scoring ensures that important turns are prioritized.
+**Comparison with Baselines**: Baseline algorithms (DP, SW, US, AT) do not explicitly preserve turns. While they may coincidentally preserve some turns through geometric selection, they have no mechanism to ensure turn preservation. The proposed method's explicit turn scoring ensures that important turns are prioritized.
 
 **Significance**: For applications where understanding route decisions is important (e.g., analyzing driver behavior, route planning, navigation systems), the proposed method's 72% turn preservation is a significant advantage over geometric methods that may miss critical turns.
 
@@ -84,17 +86,17 @@ Runtime performance is critical for practical applications, especially when proc
 
 **Key Findings**:
 - **Uniform sampling is fastest** (0.0009s average, O(n) complexity), making it suitable for real-time applications
-- **Proposed method is very efficient** (0.31s average), **4x faster than RDP** (1.22s) and **155x faster than Adaptive** (48.22s)
-- **RDP** (1.22s) has moderate runtime, but can be slow for large trajectories due to recursive nature
+- **Proposed method is very efficient** (0.31s average), **4x faster than DP** (1.22s) and **155x faster than AT** (48.22s)
+- **DP** (1.22s) has moderate runtime, but can be slow for large trajectories due to recursive nature
 - **Adaptive** (48.22s) and **Sliding Window** (54.82s) are slowest due to iterative error checking and speed computation
 
 **Scalability Analysis**:
 - Uniform sampling scales linearly and remains fast even for very large trajectories
 - Proposed method scales well (O(n log k) average case), with runtime increasing sub-linearly with trajectory size
-- RDP's recursive nature can lead to O(n²) worst-case complexity for some trajectories
+- DP's recursive nature can lead to O(n²) worst-case complexity for some trajectories
 - Adaptive and Sliding Window have poor scalability due to iterative computations
 
-**Practical Implications**: The proposed method's efficiency (0.31s average) makes it suitable for batch processing of trajectories. For a typical trajectory of 500 points, the proposed method completes in under 0.5 seconds, which is acceptable for most applications. The 4x speedup over RDP is significant for large-scale processing.
+**Practical Implications**: The proposed method's efficiency (0.31s average) makes it suitable for batch processing of trajectories. For a typical trajectory of 500 points, the proposed method completes in under 0.5 seconds, which is acceptable for most applications. The 4x speedup over DP is significant for large-scale processing.
 
 ### 7.3.2 Memory Usage
 
@@ -104,7 +106,7 @@ Memory usage is generally low for all algorithms, making them suitable for resou
 - **Uniform sampling uses least memory** (0.0225 MB average), as it requires minimal computation
 - **Sliding Window** (0.0295 MB) and **Proposed method** (0.1026 MB) use moderate memory
 - **Adaptive** (0.1015 MB) uses similar memory to proposed method
-- **RDP** memory usage varies with recursion depth but is generally low
+- **DP** memory usage varies with recursion depth but is generally low
 
 **Memory Patterns**: All algorithms use less than 0.5 MB on average, making them suitable for mobile devices and embedded systems. The proposed method's memory usage (0.10 MB) is acceptable and comparable to other feature-aware methods.
 
@@ -174,10 +176,10 @@ The proposed method achieves an excellent balance between computational cost and
 **Cost-Quality Trade-off**:
 - **Uniform sampling**: Lowest cost (0.0009s) but no semantic preservation
 - **Proposed method**: Low cost (0.31s) with excellent semantic preservation (72% turns, 71% stops)
-- **RDP**: Moderate cost (1.22s) but poor geometric quality (629m Hausdorff) and no semantic preservation
+- **DP**: Moderate cost (1.22s) but poor geometric quality (629m Hausdorff) and no semantic preservation
 - **Adaptive/Sliding Window**: High cost (48-55s) with moderate geometric quality but no semantic preservation
 
-**Efficiency Analysis**: The proposed method is **4x faster than RDP** while achieving **2.3x better geometric quality** and **providing semantic preservation that RDP cannot offer**. This makes the proposed method highly efficient for its capabilities.
+**Efficiency Analysis**: The proposed method is **4x faster than DP** while achieving **2.3x better geometric quality** and **providing semantic preservation that DP cannot offer**. This makes the proposed method highly efficient for its capabilities.
 
 **Practical Viability**: At 0.31s average runtime, the proposed method can process:
 - 3 trajectories per second (real-time processing)
@@ -195,15 +197,15 @@ This efficiency makes the proposed method practical for real-world applications 
 ### 7.7.1 Strengths of Proposed Method
 
 1. **Excellent Semantic Preservation**: Achieves 71.8% turn preservation and 70.7% stop preservation on average, which baseline methods cannot provide
-2. **Competitive Geometric Quality**: 273m Hausdorff distance is 2.3x better than RDP (629m) and acceptable for GPS applications
-3. **High Efficiency**: 0.31s average runtime is 4x faster than RDP and 155x faster than Adaptive/Sliding Window
+2. **Competitive Geometric Quality**: 273m Hausdorff distance is 2.3x better than DP (629m) and acceptable for GPS applications
+3. **High Efficiency**: 0.31s average runtime is 4x faster than DP and 155x faster than AT/SW
 4. **Handles Irregular Sampling**: Explicit irregularity scoring preserves points in sparse regions
 5. **Robust to Noise**: Smoothing and duration-based scoring reduce sensitivity to GPS measurement noise
 6. **Fixed Budget Constraint**: Works directly with compression budgets, unlike threshold-based methods
 
 ### 7.7.2 Weaknesses of Proposed Method
 
-1. **Geometric Quality**: 273m Hausdorff distance is 2.7x higher than uniform sampling (101m), though still acceptable and much better than RDP
+1. **Geometric Quality**: 273m Hausdorff distance is 2.7x higher than uniform sampling (101m), though still acceptable and much better than DP
 2. **Parameter Tuning**: Requires weight parameter selection (turn, stop, speed, irregular), though default weights (0.3, 0.3, 0.2, 0.2) work well across diverse trajectories
 3. **Complexity**: More complex than uniform sampling, though still simpler than adaptive methods
 4. **Semantic Metrics Only for Proposed**: Turn/stop preservation metrics are only applicable to the proposed method, making direct comparison with baselines challenging
@@ -211,7 +213,7 @@ This efficiency makes the proposed method practical for real-world applications 
 ### 7.7.3 When to Use Each Method
 
 - **Uniform Sampling**: When speed is critical and semantic features are unimportant
-- **RDP**: When geometric accuracy is paramount and semantic features are less important
+- **DP**: When geometric accuracy is paramount and semantic features are less important
 - **Sliding Window**: When local error control is needed
 - **Proposed Method**: When semantic features (turns, stops) are important and irregular sampling is present
 
@@ -224,13 +226,13 @@ The experimental results demonstrate that the proposed method successfully achie
 1. **Semantic Preservation**: With 72% turn preservation and 71% stop preservation, the method effectively preserves important trajectory features that geometric methods cannot guarantee.
 
 2. **Geometric Quality**: While geometric error (273m Hausdorff) is higher than uniform sampling (101m), it is:
-   - 2.3x better than RDP (629m)
+   - 2.3x better than DP (629m)
    - Within acceptable bounds for GPS applications
    - A reasonable trade-off for semantic preservation
 
 3. **Efficiency**: At 0.31s average runtime, the method is:
-   - 4x faster than RDP
-   - 155x faster than Adaptive/Sliding Window
+   - 4x faster than DP
+   - 155x faster than AT/SW
    - Practical for real-world applications
 
 ### 7.8.2 Key Insights

@@ -15,7 +15,7 @@ Summary tables typically show mean and standard deviation of metrics across mult
 ```
 Algorithm    | Hausdorff (m) | Turn Preservation
 -------------|--------------|------------------
-RDP          | 15.2 ± 3.1   | 0.45 ± 0.12
+DP           | 15.2 ± 3.1   | 0.45 ± 0.12
 Proposed     | 18.5 ± 4.2   | 0.82 ± 0.08
 ```
 
@@ -72,7 +72,7 @@ Detailed tables show results for individual trajectories. Use these to:
 **Trade-off**: Better quality may require more computation time.
 
 **Discussion Framework**:
-1. **Compare**: "The proposed method has runtime comparable to RDP (O(n log k) vs O(n log n))."
+1. **Compare**: "The proposed method has runtime comparable to DP (O(n log k) vs O(n log n))."
 2. **Contextualize**: "For trajectories of typical size (100-1000 points), runtime is < 1 second."
 3. **Justify**: "The additional computation is justified by improved semantic preservation."
 
@@ -83,7 +83,7 @@ Detailed tables show results for individual trajectories. Use these to:
 **Discussion Framework**:
 1. **Observe**: "As compression ratio increases, all metrics degrade, as expected."
 2. **Compare**: "The proposed method maintains better semantic preservation at high compression."
-3. **Quantify**: "At 20x compression, turn preservation is 0.65 vs 0.25 for RDP."
+3. **Quantify**: "At 20x compression, turn preservation is 0.65 vs 0.25 for DP."
 
 ## 9.4 What Reviewers Expect
 

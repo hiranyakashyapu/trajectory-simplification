@@ -8,7 +8,7 @@ Trajectory simplification, also known as trajectory compression or line generali
 
 ## 1.2 Problem Statement
 
-Traditional trajectory simplification algorithms, such as the Douglas-Peucker (RDP) algorithm and sliding window methods, primarily focus on geometric error minimization. While these methods are effective for regularly sampled, noise-free trajectories, they face significant challenges when dealing with:
+Traditional trajectory simplification algorithms, such as Douglas-Peucker (DP) and Sliding Window (SW), primarily focus on geometric error minimization. While these methods are effective for regularly sampled, noise-free trajectories, they face significant challenges when dealing with:
 
 1. **Irregular Sampling**: Real-world GPS trajectories often exhibit irregular sampling intervals due to device limitations, signal loss, or power-saving modes. Points in sparse regions may represent unique information that should be preserved.
 

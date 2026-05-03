@@ -53,7 +53,7 @@ This will:
 python src/experiments/run_experiments.py \
     --max-trajectories 20 \
     --compression-ratios 2.0 5.0 10.0 \
-    --algorithms rdp sliding_window uniform adaptive proposed
+    --algorithms original dp squish vw sw rw proposed
 ```
 
 This will:
@@ -95,7 +95,7 @@ jupyter notebook notebooks/01_dataset_analysis.ipynb
 
 ## Key Files
 
-- **`src/algorithms/baseline_algorithms.py`**: RDP, Sliding Window, Uniform, Adaptive
+- **`src/algorithms/baseline_algorithms.py`**: Original passthrough, DP, SQUISH, VW, SW, RW (+ aliases)
 - **`src/algorithms/proposed_method.py`**: Our proposed turn/speed/stop-aware method
 - **`src/metrics/evaluation_metrics.py`**: All evaluation metrics
 - **`src/experiments/run_experiments.py`**: Main experiment runner
@@ -112,9 +112,9 @@ import pandas as pd
 # Load trajectory
 traj = pd.read_pickle('data/processed/trajectories.pkl')[0]
 
-# Simplify with RDP
+# Simplify with Douglas-Peucker (DP alias)
 budget = len(traj) // 5  # 5x compression
-simplified = simplify_with_budget(traj, 'rdp', budget)
+simplified = simplify_with_budget(traj, 'dp', budget)
 print(f"Simplified from {len(traj)} to {len(simplified)} points")
 ```
 
@@ -133,7 +133,7 @@ traj = trajectories[0]
 # Plot comparison
 plot_trajectory_comparison(
     traj,
-    ['rdp', 'sliding_window', 'uniform', 'proposed'],
+    ['dp', 'squish', 'vw', 'sw', 'rw'],
     compression_ratio=5.0,
     output_path='comparison.png'
 )
@@ -145,7 +145,7 @@ plot_trajectory_comparison(
 from src.utils.synthetic_generator import scalability_test
 
 results = scalability_test(
-    algorithms=['rdp', 'sliding_window', 'uniform', 'proposed'],
+    algorithms=['dp', 'squish', 'vw', 'sw', 'rw', 'proposed'],
     trajectory_sizes=[100, 200, 500, 1000, 2000],
     compression_ratio=5.0
 )

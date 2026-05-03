@@ -4,7 +4,7 @@
 
 We implemented four baseline algorithms for comparison:
 
-### 4.1.1 Douglas-Peucker (RDP)
+### 4.1.1 Douglas-Peucker (DP)
 
 **Algorithm**: Recursive point elimination based on perpendicular distance.
 
@@ -21,7 +21,7 @@ We implemented four baseline algorithms for comparison:
 - May remove important points in irregular sampling regions
 - Sensitive to noise
 
-### 4.1.2 Sliding Window
+### 4.1.2 Sliding Window (SW)
 
 **Algorithm**: Linear-time window-based simplification.
 
@@ -38,7 +38,7 @@ We implemented four baseline algorithms for comparison:
 - Does not preserve semantic features
 - Sensitive to local noise
 
-### 4.1.3 Uniform Sampling
+### 4.1.3 Uniform Sampling (US)
 
 **Algorithm**: Select points at regular intervals.
 
@@ -56,7 +56,7 @@ We implemented four baseline algorithms for comparison:
 - May skip important points
 - Not adaptive to trajectory characteristics
 
-### 4.1.4 Adaptive Threshold
+### 4.1.4 Adaptive Threshold (AT)
 
 **Algorithm**: Sliding window with speed-adaptive error threshold.
 
@@ -234,5 +234,5 @@ function ProposedSimplification(T, budget, weights):
 - Geometric refinement: O(n × k) in worst case
 - **Total Complexity**: O(n × k) worst case, O(n log k) average case
 
-This is comparable to RDP's O(n log n) average case and better than RDP's O(n²) worst case when k << n.
+This is comparable to DP's O(n log n) average case and better than DP's O(n²) worst case when k << n.
 

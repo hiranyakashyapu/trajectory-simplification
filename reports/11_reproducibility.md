@@ -70,10 +70,12 @@ experiments:
   max_trajectories: 50
   compression_ratios: [2.0, 5.0, 10.0, 20.0]
   algorithms:
-    - rdp
-    - sliding_window
-    - uniform
-    - adaptive
+    - original
+    - dp
+    - squish
+    - vw
+    - sw
+    - rw
     - proposed
   
   algorithm_params:
@@ -194,7 +196,7 @@ def main():
    python src/experiments/run_experiments.py \
        --max-trajectories 50 \
        --compression-ratios 2.0 5.0 10.0 20.0 \
-       --algorithms rdp sliding_window uniform adaptive proposed
+       --algorithms original dp squish vw sw rw proposed
    ```
 
 5. **Generate Plots**:
@@ -293,8 +295,8 @@ import unittest
 from src.algorithms.baseline_algorithms import douglas_peucker
 
 class TestAlgorithms(unittest.TestCase):
-    def test_rdp_basic(self):
-        # Test RDP on simple trajectory
+    def test_dp_basic(self):
+        # Test DP on simple trajectory
         trajectory = ...
         result = douglas_peucker(trajectory, epsilon=10.0)
         self.assertLessEqual(len(result), len(trajectory))

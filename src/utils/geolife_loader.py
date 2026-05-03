@@ -51,11 +51,17 @@ class GeoLifeLoader:
         """
         try:
             # Skip first 6 lines (metadata)
-            df = pd.read_csv(filepath, skiprows=6, header=None,
-                           names=['lat', 'lon', 'zero', 'alt', 'date', 'time'])
+            # GeoLife .plt rows contain 7 columns:
+            # lat, lon, 0, altitude, date_days, date, time
+            df = pd.read_csv(
+                filepath,
+                skiprows=6,
+                header=None,
+                names=['lat', 'lon', 'zero', 'alt', 'date_days', 'date', 'time']
+            )
             
             # Remove zero column
-            df = df.drop(columns=['zero'])
+            df = df.drop(columns=['zero', 'date_days'])
             
             # Combine date and time into timestamp
             df['timestamp'] = pd.to_datetime(df['date'] + ' ' + df['time'])

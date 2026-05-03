@@ -61,8 +61,14 @@ def plot_trajectory_comparison(trajectory: pd.DataFrame,
     
     # Plot each algorithm
     algorithm_names = {
+        'none': 'None',
+        'dp': 'Douglas-Peucker',
         'rdp': 'Douglas-Peucker',
+        'sw': 'Sliding Window',
         'sliding_window': 'Sliding Window',
+        'vw': 'Visvalingam-Whyatt',
+        'rw': 'Reumann-Witkam',
+        'squish': 'SQUISH',
         'uniform': 'Uniform Sampling',
         'adaptive': 'Adaptive Threshold',
         'proposed': 'Proposed Method'
@@ -122,17 +128,29 @@ def plot_compression_error_curves(results_df: pd.DataFrame,
         results_df: Results DataFrame from experiments
         output_path: Path to save figure
     """
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    
-    metrics = [
+    metric_specs = [
         ('hausdorff_distance', 'Hausdorff Distance (m)'),
         ('average_pte', 'Average PTE (m)'),
         ('frechet_distance', 'Frechet Distance (m)'),
+        ('ped', 'PED (m)'),
+        ('dad', 'DAD (degrees)'),
+        ('sed', 'SED (m)'),
+        ('sad', 'SAD (m/s)'),
+        ('issd', 'ISSD (m*s)'),
         ('runtime_seconds', 'Runtime (seconds)')
     ]
+    metrics = [(metric, label) for metric, label in metric_specs if metric in results_df.columns]
+    if not metrics:
+        print("No available metrics found for compression-error curves.")
+        return
+
+    n_cols = 3
+    n_rows = int(np.ceil(len(metrics) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4.5 * n_rows))
+    axes = np.atleast_1d(axes).flatten()
     
     for idx, (metric, ylabel) in enumerate(metrics):
-        ax = axes[idx // 2, idx % 2]
+        ax = axes[idx]
         
         for algorithm in results_df['algorithm'].unique():
             algo_data = results_df[results_df['algorithm'] == algorithm]
@@ -148,8 +166,11 @@ def plot_compression_error_curves(results_df: pd.DataFrame,
         ax.legend()
         ax.grid(True, alpha=0.3)
         ax.set_xscale('log')
-        if metric != 'runtime_seconds':
+        if metric not in ('runtime_seconds', 'dad', 'sad'):
             ax.set_yscale('log')
+
+    for idx in range(len(metrics), len(axes)):
+        axes[idx].axis('off')
     
     plt.tight_layout()
     
@@ -209,12 +230,35 @@ def plot_metric_comparison(results_df: pd.DataFrame,
         compression_ratio: Specific compression ratio to compare
         output_path: Path to save figure
     """
-    # Filter by compression ratio
-    filtered = results_df[results_df['compression_ratio'] == compression_ratio]
+    # Compression ratios are often not exact due to integer budgets.
+    # Select the nearest available ratio per algorithm/trajectory group.
+    ratio_series = pd.to_numeric(results_df['compression_ratio'], errors='coerce')
+    valid = results_df[ratio_series.notna()].copy()
+    valid['compression_ratio'] = ratio_series[ratio_series.notna()]
+
+    group_cols = ['algorithm']
+    if 'trajectory_id' in valid.columns:
+        group_cols.append('trajectory_id')
+
+    nearest_rows = []
+    tolerance = max(0.5, 0.25 * compression_ratio)
+    for _, group in valid.groupby(group_cols, dropna=False):
+        nearest_idx = (group['compression_ratio'] - compression_ratio).abs().idxmin()
+        nearest_row = valid.loc[nearest_idx]
+        if abs(float(nearest_row['compression_ratio']) - compression_ratio) <= tolerance:
+            nearest_rows.append(nearest_row)
+
+    filtered = pd.DataFrame(nearest_rows)
+    if filtered.empty:
+        print(f"No data available to compare near compression ratio {compression_ratio}x.")
+        return
     
     # Select metrics to compare
-    metrics = ['hausdorff_distance', 'average_pte', 'frechet_distance',
-               'turn_preservation', 'stop_preservation']
+    metrics = [
+        'hausdorff_distance', 'average_pte', 'frechet_distance',
+        'ped', 'dad', 'sed', 'sad', 'issd',
+        'turn_preservation', 'stop_preservation'
+    ]
     
     # Filter to available metrics
     available_metrics = [m for m in metrics if m in filtered.columns]
@@ -235,7 +279,7 @@ def plot_metric_comparison(results_df: pd.DataFrame,
         
         ax.set_xlabel('Algorithm')
         ax.set_ylabel(metric.replace('_', ' ').title())
-        ax.set_title(f'{metric.replace("_", " ").title()}\n(Compression: {compression_ratio}x)')
+        ax.set_title(f'{metric.replace("_", " ").title()}\n(Target compression: {compression_ratio}x)')
         ax.set_xticks(x_pos)
         ax.set_xticklabels(grouped.index, rotation=45, ha='right')
         ax.grid(True, alpha=0.3, axis='y')
@@ -280,7 +324,7 @@ def generate_all_plots(results_file: str = "results/experiment_results.csv",
     sample_traj = trajectories[0]
     plot_trajectory_comparison(
         sample_traj,
-        ['rdp', 'sliding_window', 'uniform', 'adaptive', 'proposed'],
+        ['dp', 'squish', 'vw', 'sw', 'rw','proposed'],
         compression_ratio=5.0,
         output_path=str(output_dir / "trajectory_comparison.png")
     )

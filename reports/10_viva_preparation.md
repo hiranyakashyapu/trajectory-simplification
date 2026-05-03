@@ -25,7 +25,7 @@
 **A**: We use a two-stage approach: first select points by semantic importance, then apply geometric refinement to ensure geometric quality. This allows us to preserve semantic features while maintaining acceptable geometric error. The refinement step adds points with high geometric error if budget allows.
 
 **Q: What is the complexity of your algorithm?**
-**A**: Importance scoring is O(n) for each component. Point selection is O(n log k) for top-k selection. Geometric refinement is O(n × k) worst case. Overall complexity is O(n × k) worst case, O(n log k) average case, which is comparable to RDP.
+**A**: Importance scoring is O(n) for each component. Point selection is O(n log k) for top-k selection. Geometric refinement is O(n × k) worst case. Overall complexity is O(n × k) worst case, O(n log k) average case, which is comparable to DP.
 
 ### 10.1.3 Evaluation
 
@@ -44,7 +44,7 @@
 ### 10.1.4 Results
 
 **Q: What are your main findings?**
-**A**: Our main findings are: (1) The proposed method achieves significantly better turn and stop preservation (82% vs 45% for RDP), (2) It handles irregular sampling effectively through explicit irregularity scoring, (3) It maintains competitive geometric quality through refinement, (4) Runtime is comparable to RDP.
+**A**: Our main findings are: (1) The proposed method achieves significantly better turn and stop preservation (82% vs 45% for DP), (2) It handles irregular sampling effectively through explicit irregularity scoring, (3) It maintains competitive geometric quality through refinement, (4) Runtime is comparable to DP.
 
 **Q: When does your method perform best?**
 **A**: Our method performs best on trajectories with: (1) Many turns or stops (semantic features), (2) Irregular sampling patterns, (3) Applications where semantic preservation is important (e.g., route analysis, navigation).
@@ -120,7 +120,7 @@
 Practice answering these questions out loud:
 
 1. What is the main contribution of your work?
-2. How does your method differ from RDP?
+2. How does your method differ from DP?
 3. Why is semantic preservation important?
 4. What are the limitations of your method?
 5. How would you extend this work?

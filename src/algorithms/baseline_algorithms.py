@@ -6,6 +6,9 @@ This module implements standard baseline algorithms for trajectory simplificatio
 2. Sliding Window - Local error threshold
 3. Uniform Sampling - Fixed interval sampling
 4. Adaptive Threshold - Dynamic error threshold based on speed
+5. Visvalingam-Whyatt (VW) - Effective-area based
+6. Reumann-Witkam (RW) - Strip/corridor based
+7. SQUISH - Priority-based point removal
 
 Each algorithm has different strengths and weaknesses:
 - RDP: Good for geometric preservation, but ignores temporal/speed information
@@ -346,6 +349,177 @@ def adaptive_threshold(trajectory: Union[pd.DataFrame, np.ndarray],
     return points[indices_list]
 
 
+def visvalingam_whyatt(trajectory: Union[pd.DataFrame, np.ndarray],
+                       num_points: int,
+                       indices: bool = False) -> Union[np.ndarray, List[int]]:
+    """
+    Visvalingam-Whyatt simplification using effective triangle areas.
+
+    Args:
+        trajectory: DataFrame with 'lat', 'lon' columns or array of (lat, lon)
+        num_points: Target number of points
+        indices: If True, return indices
+
+    Returns:
+        Simplified trajectory or selected indices
+    """
+    if isinstance(trajectory, pd.DataFrame):
+        points = trajectory[['lat', 'lon']].values
+    else:
+        points = np.array(trajectory)
+
+    n = len(points)
+    if n <= num_points:
+        idx = list(range(n))
+        return idx if indices else points
+    if num_points <= 2:
+        idx = [0, n - 1]
+        return idx if indices else points[idx]
+
+    active = list(range(n))
+
+    def triangle_area(i_prev: int, i_curr: int, i_next: int) -> float:
+        p1 = points[i_prev]
+        p2 = points[i_curr]
+        p3 = points[i_next]
+        return abs(
+            p1[1] * (p2[0] - p3[0]) +
+            p2[1] * (p3[0] - p1[0]) +
+            p3[1] * (p1[0] - p2[0])
+        ) / 2.0
+
+    while len(active) > num_points:
+        min_area = np.inf
+        min_pos = None
+        for pos in range(1, len(active) - 1):
+            area = triangle_area(active[pos - 1], active[pos], active[pos + 1])
+            if area < min_area:
+                min_area = area
+                min_pos = pos
+        if min_pos is None:
+            break
+        active.pop(min_pos)
+
+    active = sorted(active)
+    if indices:
+        return active
+    return points[active]
+
+
+def reumann_witkam(trajectory: Union[pd.DataFrame, np.ndarray],
+                   epsilon: float,
+                   indices: bool = False) -> Union[np.ndarray, List[int]]:
+    """
+    Reumann-Witkam simplification with a fixed strip width epsilon.
+
+    Args:
+        trajectory: DataFrame with 'lat', 'lon' columns or array of (lat, lon)
+        epsilon: Strip width threshold (meters)
+        indices: If True, return indices
+
+    Returns:
+        Simplified trajectory or selected indices
+    """
+    if isinstance(trajectory, pd.DataFrame):
+        points = trajectory[['lat', 'lon']].values
+    else:
+        points = np.array(trajectory)
+
+    n = len(points)
+    if n <= 2:
+        idx = list(range(n))
+        return idx if indices else points
+
+    selected = [0]
+    anchor = 0
+
+    while anchor < n - 1:
+        if anchor + 1 >= n:
+            break
+
+        line_start = tuple(points[anchor])
+        line_end = tuple(points[anchor + 1])
+        candidate = anchor + 2
+        last_inside = anchor + 1
+
+        while candidate < n:
+            dist = point_to_line_distance(tuple(points[candidate]), line_start, line_end)
+            if dist <= epsilon:
+                last_inside = candidate
+                candidate += 1
+            else:
+                break
+
+        if last_inside <= anchor:
+            last_inside = anchor + 1
+
+        selected.append(last_inside)
+        anchor = last_inside
+
+    if selected[-1] != n - 1:
+        selected.append(n - 1)
+
+    selected = sorted(list(set(selected)))
+    if indices:
+        return selected
+    return points[selected]
+
+
+def squish(trajectory: Union[pd.DataFrame, np.ndarray],
+           num_points: int,
+           indices: bool = False) -> Union[np.ndarray, List[int]]:
+    """
+    SQUISH-style priority removal using local triangle areas.
+
+    Args:
+        trajectory: DataFrame with 'lat', 'lon' columns or array of (lat, lon)
+        num_points: Target number of points
+        indices: If True, return indices
+
+    Returns:
+        Simplified trajectory or selected indices
+    """
+    if isinstance(trajectory, pd.DataFrame):
+        points = trajectory[['lat', 'lon']].values
+    else:
+        points = np.array(trajectory)
+
+    n = len(points)
+    if n <= num_points:
+        idx = list(range(n))
+        return idx if indices else points
+    if num_points <= 2:
+        idx = [0, n - 1]
+        return idx if indices else points[idx]
+
+    active = list(range(n))
+
+    def priority(pos: int) -> float:
+        # Endpoints are always preserved.
+        if pos == 0 or pos == len(active) - 1:
+            return np.inf
+        i_prev, i_curr, i_next = active[pos - 1], active[pos], active[pos + 1]
+        p1, p2, p3 = points[i_prev], points[i_curr], points[i_next]
+        area = abs(
+            p1[1] * (p2[0] - p3[0]) +
+            p2[1] * (p3[0] - p1[0]) +
+            p3[1] * (p1[0] - p2[0])
+        ) / 2.0
+        return area
+
+    while len(active) > num_points:
+        priorities = [priority(pos) for pos in range(len(active))]
+        remove_pos = int(np.argmin(priorities))
+        if remove_pos == 0 or remove_pos == len(active) - 1:
+            break
+        active.pop(remove_pos)
+
+    active = sorted(active)
+    if indices:
+        return active
+    return points[active]
+
+
 def simplify_with_budget(trajectory: Union[pd.DataFrame, np.ndarray],
                         algorithm: str,
                         budget: int,
@@ -375,7 +549,32 @@ def simplify_with_budget(trajectory: Union[pd.DataFrame, np.ndarray],
             return trajectory[['lat', 'lon']].values
         return np.array(trajectory)
     
-    algorithm = algorithm.lower()
+    algorithm_key = algorithm.lower().replace(" ", "_")
+    algorithm_aliases = {
+        'original': 'original',
+        'rdp': 'rdp',
+        'dp': 'rdp',
+        'douglas-peucker': 'rdp',
+        'douglas_peucker': 'rdp',
+        'sliding_window': 'sliding_window',
+        'sliding-window': 'sliding_window',
+        'sw': 'sliding_window',
+        'uniform': 'uniform',
+        'adaptive': 'adaptive',
+        'visvalingam-whyatt': 'vw',
+        'visvalingam_whyatt': 'vw',
+        'vw': 'vw',
+        'reumann-witkam': 'rw',
+        'reumann_witkam': 'rw',
+        'rw': 'rw',
+        'squish': 'squish',
+    }
+    algorithm = algorithm_aliases.get(algorithm_key, algorithm_key)
+
+    if algorithm == 'original':
+        if isinstance(trajectory, pd.DataFrame):
+            return trajectory[['lat', 'lon']].values
+        return np.array(trajectory)
     
     if algorithm == 'uniform':
         return uniform_sampling(trajectory, budget, indices=False)
@@ -454,6 +653,36 @@ def simplify_with_budget(trajectory: Union[pd.DataFrame, np.ndarray],
         if best_result is None:
             best_result = result
         
+        if isinstance(trajectory, pd.DataFrame):
+            return trajectory.iloc[best_result][['lat', 'lon']].values
+        return np.array(trajectory)[best_result]
+
+    elif algorithm == 'vw':
+        return visvalingam_whyatt(trajectory, budget, indices=False)
+
+    elif algorithm == 'squish':
+        return squish(trajectory, budget, indices=False)
+
+    elif algorithm == 'rw':
+        epsilon_min, epsilon_max = 0, 1000
+        best_result = None
+
+        for _ in range(20):
+            epsilon = (epsilon_min + epsilon_max) / 2
+            result = reumann_witkam(trajectory, epsilon, indices=True)
+
+            if len(result) <= budget:
+                best_result = result
+                epsilon_max = epsilon
+            else:
+                epsilon_min = epsilon
+
+            if abs(len(result) - budget) <= 1:
+                break
+
+        if best_result is None:
+            best_result = result
+
         if isinstance(trajectory, pd.DataFrame):
             return trajectory.iloc[best_result][['lat', 'lon']].values
         return np.array(trajectory)[best_result]

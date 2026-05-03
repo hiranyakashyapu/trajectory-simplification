@@ -8,6 +8,11 @@ This module implements various metrics to evaluate the quality of simplified tra
 3. Frechet Distance: Similarity measure considering order of points
 4. Turn Preservation Metric: How well turns are preserved
 5. Stop Preservation Metric: How well stops are preserved
+6. PED (Perpendicular Euclidean Distance): Mean perpendicular error to simplified segments
+7. DAD (Direction-Aware Distance): Mean heading deviation
+8. SED (Synchronized Euclidean Distance): Mean time-synchronized spatial error
+9. SAD (Speed-Aware Distance): Mean speed difference under time synchronization
+10. ISSD (Integrated Synchronized Spatial Distance): Time-integrated synchronized error
 
 Formulas:
 - Hausdorff: H(A,B) = max(h(A,B), h(B,A)) where h(A,B) = max_{a in A} min_{b in B} d(a,b)
@@ -330,6 +335,167 @@ def compression_ratio(original: np.ndarray, simplified: np.ndarray) -> float:
     return len(original) / len(simplified)
 
 
+def _extract_time_seconds(original: pd.DataFrame) -> np.ndarray:
+    """Extract monotonic time values in seconds for synchronization."""
+    if 'timestamp' in original.columns:
+        ts = pd.to_datetime(original['timestamp'])
+        # Relative seconds to improve numerical stability.
+        time_sec = (ts - ts.iloc[0]).dt.total_seconds().to_numpy(dtype=float)
+    else:
+        time_sec = np.arange(len(original), dtype=float)
+    return time_sec
+
+
+def _make_monotonic(values: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+    """Ensure strictly increasing values for interpolation."""
+    out = values.astype(float).copy()
+    for i in range(1, len(out)):
+        if out[i] <= out[i - 1]:
+            out[i] = out[i - 1] + eps
+    return out
+
+
+def _bearing_degrees(start: np.ndarray, end: np.ndarray) -> float:
+    """Compute bearing from start(lat, lon) to end(lat, lon) in degrees [0, 360)."""
+    lat1, lon1 = np.radians(start[0]), np.radians(start[1])
+    lat2, lon2 = np.radians(end[0]), np.radians(end[1])
+    dlon = lon2 - lon1
+    y = np.sin(dlon) * np.cos(lat2)
+    x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
+    bearing = np.degrees(np.arctan2(y, x))
+    return float((bearing + 360.0) % 360.0)
+
+
+def _angular_diff_deg(a: float, b: float) -> float:
+    """Smallest absolute difference between two angles in degrees."""
+    d = abs(a - b) % 360.0
+    return float(min(d, 360.0 - d))
+
+
+def _synchronized_positions(original: pd.DataFrame,
+                            simplified: np.ndarray,
+                            original_indices: List[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Interpolate simplified trajectory positions at original timestamps.
+
+    Returns:
+        query_time_sec: Original time axis (N,)
+        sync_points: Interpolated simplified points aligned to query_time_sec (N, 2)
+        simplified_time_sec: Time axis used for simplified points (M,)
+    """
+    query_time_sec = _extract_time_seconds(original)
+    query_time_sec = _make_monotonic(query_time_sec)
+
+    if original_indices is not None and len(original_indices) == len(simplified):
+        idx = np.clip(np.asarray(original_indices, dtype=int), 0, len(original) - 1)
+        simplified_time_sec = query_time_sec[idx]
+    else:
+        simplified_time_sec = np.linspace(query_time_sec[0], query_time_sec[-1], len(simplified), dtype=float)
+
+    simplified_time_sec = _make_monotonic(simplified_time_sec)
+    lat_interp = np.interp(query_time_sec, simplified_time_sec, simplified[:, 0])
+    lon_interp = np.interp(query_time_sec, simplified_time_sec, simplified[:, 1])
+    sync_points = np.column_stack([lat_interp, lon_interp])
+
+    return query_time_sec, sync_points, simplified_time_sec
+
+
+def perpendicular_euclidean_distance(original: np.ndarray, simplified: np.ndarray) -> float:
+    """
+    PED: Mean perpendicular distance from original points to simplified segments.
+    """
+    if len(original) == 0 or len(simplified) < 2:
+        return float('inf')
+
+    errors = []
+    for point in original:
+        min_dist = float('inf')
+        for i in range(len(simplified) - 1):
+            dist = point_to_line_distance(tuple(point), tuple(simplified[i]), tuple(simplified[i + 1]))
+            min_dist = min(min_dist, dist)
+        errors.append(min_dist)
+    return float(np.mean(errors))
+
+
+def synchronized_euclidean_distance(original: pd.DataFrame,
+                                    simplified: np.ndarray,
+                                    original_indices: List[int] = None) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    SED: Mean Euclidean distance between original and time-synchronized simplified points.
+    """
+    if len(original) == 0 or len(simplified) == 0:
+        return float('inf'), np.array([]), np.array([]), np.empty((0, 2))
+
+    original_points = original[['lat', 'lon']].to_numpy(dtype=float)
+    query_time_sec, sync_points, _ = _synchronized_positions(original, simplified, original_indices)
+    dists = np.array(
+        [haversine_distance(tuple(original_points[i]), tuple(sync_points[i])) for i in range(len(original_points))],
+        dtype=float
+    )
+    return float(np.mean(dists)), dists, query_time_sec, sync_points
+
+
+def direction_aware_distance(original: pd.DataFrame,
+                             synchronized_points: np.ndarray) -> float:
+    """
+    DAD: Mean heading difference (degrees) between original and synchronized simplified trajectories.
+    """
+    original_points = original[['lat', 'lon']].to_numpy(dtype=float)
+    if len(original_points) < 2 or len(synchronized_points) < 2:
+        return 0.0
+
+    heading_errors = []
+    for i in range(len(original_points) - 1):
+        if haversine_distance(tuple(original_points[i]), tuple(original_points[i + 1])) < 1e-6:
+            continue
+        if haversine_distance(tuple(synchronized_points[i]), tuple(synchronized_points[i + 1])) < 1e-6:
+            continue
+
+        b_orig = _bearing_degrees(original_points[i], original_points[i + 1])
+        b_sync = _bearing_degrees(synchronized_points[i], synchronized_points[i + 1])
+        heading_errors.append(_angular_diff_deg(b_orig, b_sync))
+
+    if not heading_errors:
+        return 0.0
+    return float(np.mean(heading_errors))
+
+
+def speed_aware_distance(original: pd.DataFrame,
+                         synchronized_points: np.ndarray,
+                         query_time_sec: np.ndarray) -> float:
+    """
+    SAD: Mean absolute speed difference (m/s) between original and synchronized simplified trajectories.
+    """
+    original_points = original[['lat', 'lon']].to_numpy(dtype=float)
+    if len(original_points) < 2 or len(synchronized_points) < 2 or len(query_time_sec) < 2:
+        return 0.0
+
+    speed_errors = []
+    for i in range(len(original_points) - 1):
+        dt = query_time_sec[i + 1] - query_time_sec[i]
+        if dt <= 0:
+            continue
+        v_orig = haversine_distance(tuple(original_points[i]), tuple(original_points[i + 1])) / dt
+        v_sync = haversine_distance(tuple(synchronized_points[i]), tuple(synchronized_points[i + 1])) / dt
+        speed_errors.append(abs(v_orig - v_sync))
+
+    if not speed_errors:
+        return 0.0
+    return float(np.mean(speed_errors))
+
+
+def integrated_synchronized_spatial_distance(instantaneous_distances: np.ndarray,
+                                             query_time_sec: np.ndarray) -> float:
+    """
+    ISSD: Time-integrated synchronized spatial distance (meter*second).
+    """
+    if len(instantaneous_distances) == 0:
+        return 0.0
+    if len(query_time_sec) != len(instantaneous_distances):
+        return float(np.sum(instantaneous_distances))
+    return float(np.trapezoid(instantaneous_distances, query_time_sec))
+
+
 def compute_all_metrics(original: pd.DataFrame,
                        simplified: np.ndarray,
                        original_indices: List[int] = None) -> Dict:
@@ -350,6 +516,13 @@ def compute_all_metrics(original: pd.DataFrame,
     hausdorff = hausdorff_distance(original_points, simplified)
     apte = average_point_to_trajectory_error(original_points, simplified)
     frechet = frechet_distance(original_points, simplified)
+    ped = perpendicular_euclidean_distance(original_points, simplified)
+    sed, sed_series, query_time_sec, sync_points = synchronized_euclidean_distance(
+        original, simplified, original_indices
+    )
+    dad = direction_aware_distance(original, sync_points)
+    sad = speed_aware_distance(original, sync_points, query_time_sec)
+    issd = integrated_synchronized_spatial_distance(sed_series, query_time_sec)
     
     # Compression
     comp_ratio = compression_ratio(original_points, simplified)
@@ -358,6 +531,11 @@ def compute_all_metrics(original: pd.DataFrame,
         'hausdorff_distance': hausdorff,
         'average_pte': apte,
         'frechet_distance': frechet,
+        'ped': ped,
+        'dad': dad,
+        'sed': sed,
+        'sad': sad,
+        'issd': issd,
         'compression_ratio': comp_ratio,
         'original_points': len(original_points),
         'simplified_points': len(simplified)

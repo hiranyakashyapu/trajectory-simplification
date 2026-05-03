@@ -27,7 +27,7 @@ python src/utils/preprocess_geolife.py
 python src/experiments/run_experiments.py \
     --max-trajectories 50 \
     --compression-ratios 2.0 5.0 10.0 20.0 \
-    --algorithms rdp sliding_window uniform adaptive proposed \
+    --algorithms original dp squish vw sw rw proposed \
     --data-file data/processed/trajectories.pkl
 ```
 
@@ -95,7 +95,7 @@ python src/utils/preprocess_geolife.py  # Will process available trajectories
 python src/experiments/run_experiments.py \
     --max-trajectories 5 \
     --compression-ratios 5.0 10.0 \
-    --algorithms rdp proposed
+    --algorithms original dp squish vw sw rw proposed
 
 # Generate plots
 python src/experiments/generate_plots.py
@@ -126,9 +126,9 @@ with open('data/processed/trajectories.pkl', 'rb') as f:
 traj = trajectories[0]
 budget = len(traj) // 5  # 5x compression
 
-# Test RDP
-simplified = simplify_with_budget(traj, 'rdp', budget)
-print(f"RDP: {len(traj)} -> {len(simplified)} points")
+# Test DP
+simplified = simplify_with_budget(traj, 'dp', budget)
+print(f"DP: {len(traj)} -> {len(simplified)} points")
 ```
 
 ### Test Proposed Method
@@ -157,7 +157,7 @@ for key, value in metrics.items():
 from src.utils.synthetic_generator import scalability_test
 
 results = scalability_test(
-    algorithms=['rdp', 'sliding_window', 'uniform', 'proposed'],
+    algorithms=['dp', 'squish', 'vw', 'sw', 'rw', 'proposed'],
     trajectory_sizes=[100, 200, 500, 1000, 2000, 5000],
     compression_ratio=5.0,
     n_trajectories_per_size=3

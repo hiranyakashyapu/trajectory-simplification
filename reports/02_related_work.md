@@ -6,11 +6,11 @@ Trajectory simplification has been extensively studied in computational geometry
 
 ### 2.1.1 Geometric Methods
 
-**Douglas-Peucker Algorithm (RDP)**: The most widely used geometric simplification algorithm, originally proposed for line generalization [Douglas and Peucker, 1973]. It recursively finds the point with maximum perpendicular distance from the line segment connecting endpoints. If this distance exceeds a threshold ε, the algorithm recursively processes both sub-segments. RDP has O(n²) worst-case complexity but O(n log n) average case. While effective for geometric preservation, RDP ignores temporal and semantic information.
+**Douglas-Peucker Algorithm (DP)**: The most widely used geometric simplification algorithm, originally proposed for line generalization [Douglas and Peucker, 1973]. It recursively finds the point with maximum perpendicular distance from the line segment connecting endpoints. If this distance exceeds a threshold ε, the algorithm recursively processes both sub-segments. DP has O(n²) worst-case complexity but O(n log n) average case. While effective for geometric preservation, DP ignores temporal and semantic information.
 
-**Sliding Window**: A linear-time algorithm that maintains a window of points and extends it until the error exceeds a threshold [Keogh et al., 2001]. The last point before threshold violation is kept, and a new window starts. This method is efficient but may miss global patterns and is sensitive to local noise.
+**Sliding Window (SW)**: A linear-time algorithm that maintains a window of points and extends it until the error exceeds a threshold [Keogh et al., 2001]. The last point before threshold violation is kept, and a new window starts. This method is efficient but may miss global patterns and is sensitive to local noise.
 
-**Uniform Sampling**: The simplest method, selecting points at regular intervals. While computationally efficient, it ignores trajectory shape and may skip important points.
+**Uniform Sampling (US)**: The simplest method, selecting points at regular intervals. While computationally efficient, it ignores trajectory shape and may skip important points.
 
 ### 2.1.2 Temporal Methods
 

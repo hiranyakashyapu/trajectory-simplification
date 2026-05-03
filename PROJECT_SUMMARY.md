@@ -14,10 +14,10 @@ This is a complete MSc (15 credit) research project on trajectory simplification
 - [x] Documentation in `reports/03_dataset_analysis.md`
 
 ### ✅ PHASE 2: Baseline Algorithms
-- [x] Douglas-Peucker (RDP) implementation
-- [x] Sliding Window implementation
-- [x] Uniform sampling implementation
-- [x] Adaptive threshold method
+- [x] Douglas-Peucker (DP) implementation
+- [x] Sliding Window (SW) implementation
+- [x] Uniform Sampling (US) implementation
+- [x] Adaptive Threshold (AT) method
 - [x] Budget-constrained versions of all algorithms
 - [x] Complexity analysis and documentation
 - [x] Code in `src/algorithms/baseline_algorithms.py`

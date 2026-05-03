@@ -67,6 +67,17 @@ CSIT-8-PROJECT/
    python src/experiments/generate_plots.py
    ```
 
+6. **Generate OSM Comparison Map (Original + Multiple Algorithms)**
+   ```bash
+   ./venv/bin/python src/experiments/visualize_osm.py \
+     --comparison \
+     --trajectories-file data/processed/trajectories.pkl \
+     --output-file results/figures/trajectories_osm_comparison.html \
+     --max-trajectories 5 \
+     --compression-ratio 5.0 \
+     --algorithms original,dp,squish,vw,sw,rw,proposed
+   ```
+
 ### Project Phases
 - **PHASE 1**: Dataset loading and preprocessing
 - **PHASE 2**: Baseline algorithms implementation

@@ -2,10 +2,12 @@ experiments:
   max_trajectories: 50
   compression_ratios: [2.0, 5.0, 10.0, 20.0]
   algorithms:
-    - rdp
-    - sliding_window
-    - uniform
-    - adaptive
+    - original
+    - dp
+    - squish
+    - vw
+    - sw
+    - rw
     - proposed
   
   algorithm_params:

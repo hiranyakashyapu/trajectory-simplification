@@ -22,7 +22,7 @@ This research has made the following contributions:
 
 4. **Geometric Quality**: While the method prioritizes semantic features, it maintains competitive geometric quality through geometric refinement.
 
-5. **Performance**: The method has comparable runtime to RDP (O(n log k) average case) and is suitable for practical applications.
+5. **Performance**: The method has comparable runtime to DP (O(n log k) average case) and is suitable for practical applications.
 
 ## 8.3 Limitations
 

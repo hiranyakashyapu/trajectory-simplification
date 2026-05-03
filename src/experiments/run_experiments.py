@@ -55,7 +55,7 @@ class ExperimentRunner:
         
         Args:
             trajectory: Input trajectory
-            algorithm: Algorithm name ('rdp', 'sliding_window', 'uniform', 'adaptive', 'proposed')
+            algorithm: Algorithm name ('original', 'dp', 'squish', 'vw', 'sw', 'rw', 'proposed')
             compression_ratio: Target compression ratio (e.g., 5.0 means 5x compression)
             algorithm_params: Additional parameters for algorithm
             
@@ -191,6 +191,7 @@ class ExperimentRunner:
         # Group by algorithm and compression ratio
         summary_cols = [
             'hausdorff_distance', 'average_pte', 'frechet_distance',
+            'ped', 'dad', 'sed', 'sad', 'issd',
             'turn_preservation', 'stop_preservation', 'runtime_seconds', 'memory_mb'
         ]
         
@@ -220,7 +221,7 @@ def main():
                        default=[2.0, 5.0, 10.0, 20.0],
                        help='Compression ratios to test')
     parser.add_argument('--algorithms', type=str, nargs='+',
-                       default=['rdp', 'sliding_window', 'uniform', 'adaptive', 'proposed'],
+                       default=['original', 'dp', 'squish', 'vw', 'sw', 'rw', 'proposed'],
                        help='Algorithms to test')
     parser.add_argument('--data-file', type=str,
                        default='data/processed/trajectories.pkl',
