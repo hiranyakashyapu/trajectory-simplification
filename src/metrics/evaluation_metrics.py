@@ -27,6 +27,7 @@ import pandas as pd
 from typing import Union, Tuple, List, Dict
 from scipy.spatial.distance import cdist
 from src.algorithms.baseline_algorithms import haversine_distance, point_to_line_distance
+from src.utils.config import STOP_SPEED_THRESHOLD_MS, TURN_THRESHOLD_DEG, MIN_STOP_DURATION_S
 
 
 def hausdorff_distance(original: np.ndarray, simplified: np.ndarray) -> float:
@@ -185,7 +186,7 @@ def frechet_distance(original: np.ndarray, simplified: np.ndarray) -> float:
 def turn_preservation_metric(original: pd.DataFrame,
                             simplified: pd.DataFrame,
                             original_indices: List[int],
-                            turn_threshold: float = 30.0) -> Tuple[float, Dict]:
+                            turn_threshold: float = TURN_THRESHOLD_DEG) -> Tuple[float, Dict]:
     """
     Compute turn preservation metric.
     
@@ -241,8 +242,8 @@ def turn_preservation_metric(original: pd.DataFrame,
 def stop_preservation_metric(original: pd.DataFrame,
                             simplified: pd.DataFrame,
                             original_indices: List[int],
-                            stop_threshold: float = 1.0,
-                            min_duration: float = 30.0) -> Tuple[float, Dict]:
+                            stop_threshold: float = STOP_SPEED_THRESHOLD_MS,
+                            min_duration: float = MIN_STOP_DURATION_S) -> Tuple[float, Dict]:
     """
     Compute stop preservation metric.
     
@@ -335,7 +336,7 @@ def compression_ratio(original: np.ndarray, simplified: np.ndarray) -> float:
     return len(original) / len(simplified)
 
 
-def _extract_time_seconds(original: pd.DataFrame) -> np.ndarray:
+def extract_time_seconds(original: pd.DataFrame) -> np.ndarray:
     """Extract monotonic time values in seconds for synchronization."""
     if 'timestamp' in original.columns:
         ts = pd.to_datetime(original['timestamp'])
@@ -346,7 +347,7 @@ def _extract_time_seconds(original: pd.DataFrame) -> np.ndarray:
     return time_sec
 
 
-def _make_monotonic(values: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+def make_monotonic(values: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     """Ensure strictly increasing values for interpolation."""
     out = values.astype(float).copy()
     for i in range(1, len(out)):
@@ -355,7 +356,7 @@ def _make_monotonic(values: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     return out
 
 
-def _bearing_degrees(start: np.ndarray, end: np.ndarray) -> float:
+def bearing_degrees(start: np.ndarray, end: np.ndarray) -> float:
     """Compute bearing from start(lat, lon) to end(lat, lon) in degrees [0, 360)."""
     lat1, lon1 = np.radians(start[0]), np.radians(start[1])
     lat2, lon2 = np.radians(end[0]), np.radians(end[1])
@@ -366,13 +367,13 @@ def _bearing_degrees(start: np.ndarray, end: np.ndarray) -> float:
     return float((bearing + 360.0) % 360.0)
 
 
-def _angular_diff_deg(a: float, b: float) -> float:
+def angular_diff_deg(a: float, b: float) -> float:
     """Smallest absolute difference between two angles in degrees."""
     d = abs(a - b) % 360.0
     return float(min(d, 360.0 - d))
 
 
-def _synchronized_positions(original: pd.DataFrame,
+def synchronized_positions(original: pd.DataFrame,
                             simplified: np.ndarray,
                             original_indices: List[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -383,8 +384,8 @@ def _synchronized_positions(original: pd.DataFrame,
         sync_points: Interpolated simplified points aligned to query_time_sec (N, 2)
         simplified_time_sec: Time axis used for simplified points (M,)
     """
-    query_time_sec = _extract_time_seconds(original)
-    query_time_sec = _make_monotonic(query_time_sec)
+    query_time_sec = extract_time_seconds(original)
+    query_time_sec = make_monotonic(query_time_sec)
 
     if original_indices is not None and len(original_indices) == len(simplified):
         idx = np.clip(np.asarray(original_indices, dtype=int), 0, len(original) - 1)
@@ -392,7 +393,7 @@ def _synchronized_positions(original: pd.DataFrame,
     else:
         simplified_time_sec = np.linspace(query_time_sec[0], query_time_sec[-1], len(simplified), dtype=float)
 
-    simplified_time_sec = _make_monotonic(simplified_time_sec)
+    simplified_time_sec = make_monotonic(simplified_time_sec)
     lat_interp = np.interp(query_time_sec, simplified_time_sec, simplified[:, 0])
     lon_interp = np.interp(query_time_sec, simplified_time_sec, simplified[:, 1])
     sync_points = np.column_stack([lat_interp, lon_interp])
@@ -427,7 +428,7 @@ def synchronized_euclidean_distance(original: pd.DataFrame,
         return float('inf'), np.array([]), np.array([]), np.empty((0, 2))
 
     original_points = original[['lat', 'lon']].to_numpy(dtype=float)
-    query_time_sec, sync_points, _ = _synchronized_positions(original, simplified, original_indices)
+    query_time_sec, sync_points, _ = synchronized_positions(original, simplified, original_indices)
     dists = np.array(
         [haversine_distance(tuple(original_points[i]), tuple(sync_points[i])) for i in range(len(original_points))],
         dtype=float
@@ -451,9 +452,9 @@ def direction_aware_distance(original: pd.DataFrame,
         if haversine_distance(tuple(synchronized_points[i]), tuple(synchronized_points[i + 1])) < 1e-6:
             continue
 
-        b_orig = _bearing_degrees(original_points[i], original_points[i + 1])
-        b_sync = _bearing_degrees(synchronized_points[i], synchronized_points[i + 1])
-        heading_errors.append(_angular_diff_deg(b_orig, b_sync))
+        b_orig = bearing_degrees(original_points[i], original_points[i + 1])
+        b_sync = bearing_degrees(synchronized_points[i], synchronized_points[i + 1])
+        heading_errors.append(angular_diff_deg(b_orig, b_sync))
 
     if not heading_errors:
         return 0.0
@@ -566,25 +567,84 @@ def compute_all_metrics(original: pd.DataFrame,
 
 
 if __name__ == "__main__":
-    # Example usage
-    import pandas as pd
-    
-    # Create sample trajectories
-    n = 100
-    original = pd.DataFrame({
-        'lat': np.linspace(0, 1, n) + np.random.normal(0, 0.01, n),
-        'lon': np.linspace(0, 1, n) + np.random.normal(0, 0.01, n),
-        'timestamp': pd.date_range('2023-01-01', periods=n, freq='1min')
-    })
-    
-    # Simplified (every 5th point)
-    simplified = original.iloc[::5][['lat', 'lon']].values
-    indices = list(range(0, n, 5))
-    
-    # Compute metrics
-    metrics = compute_all_metrics(original, simplified, indices)
-    
-    print("Evaluation Metrics:")
-    for key, value in metrics.items():
-        print(f"  {key}: {value:.4f}" if isinstance(value, float) else f"  {key}: {value}")
+    """
+    Verify evaluation metrics on real GeoLife GPS trajectories.
+
+    Loads preprocessed GeoLife data from data/processed/trajectories.pkl and
+    tests all metrics across three algorithms (VW, Greedy Policy, Proposed) at
+    5× compression, plus an identity check confirming zero error when simplified
+    equals the original.
+    """
+    import sys, os, pickle
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from src.algorithms.baseline_algorithms import simplify_with_budget
+    from src.algorithms.proposed_method import proposed_simplification
+
+    DATA_FILE = Path("data/processed/trajectories.pkl")
+    if not DATA_FILE.exists():
+        print(f"[ERROR] {DATA_FILE} not found. Run: python src/utils/preprocess_geolife.py")
+        sys.exit(1)
+
+    print(f"Loading trajectories from {DATA_FILE} ...")
+    with open(DATA_FILE, "rb") as f:
+        all_trajs = pickle.load(f)
+
+    # Use 3 short trajectories for fast but real evaluation
+    trajs = sorted(all_trajs[:60], key=len)[:3]
+    print(f"Selected {len(trajs)} trajectories, sizes: {[len(t) for t in trajs]}\n")
+
+    ALGORITHMS = [
+        ("vw",            lambda t, b: (simplify_with_budget(t, 'vw', b),           None)),
+        ("greedy_policy", lambda t, b: (simplify_with_budget(t, 'greedy_policy', b), None)),
+        ("proposed",      lambda t, b: proposed_simplification(t, b)),
+    ]
+    COMPRESSION_RATIO = 5.0
+
+    print(f"{'Algorithm':<18} {'Traj':>5} {'N_orig':>6} {'N_simp':>6} "
+          f"{'Hausdorff(m)':>13} {'APTE(m)':>9} {'Fréchet(m)':>11} "
+          f"{'SED(m)':>8} {'DAD(°)':>7} "
+          f"{'TurnPres':>9} {'StopPres':>9} {'RT(s)':>7}")
+    print("-" * 118)
+
+    import time, tracemalloc
+    for traj in trajs:
+        budget = max(2, int(len(traj) / COMPRESSION_RATIO))
+        for name, fn in ALGORITHMS:
+            tracemalloc.start()
+            t0 = time.time()
+            simp, idx = fn(traj, budget)
+            elapsed = time.time() - t0
+            tracemalloc.stop()
+
+            m = compute_all_metrics(traj, simp, idx)
+            tp = m.get("turn_preservation")
+            sp = m.get("stop_preservation")
+            tp_str = f"{tp:>9.3f}" if tp is not None else f"{'—':>9}"
+            sp_str = f"{sp:>9.3f}" if sp is not None else f"{'—':>9}"
+            print(
+                f"{name:<18} {len(traj):>5} {m['original_points']:>6} {m['simplified_points']:>6} "
+                f"{m['hausdorff_distance']:>13.2f} {m['average_pte']:>9.3f} {m['frechet_distance']:>11.2f} "
+                f"{m['sed']:>8.2f} {m['dad']:>7.2f} "
+                f"{tp_str} {sp_str} {elapsed:>7.3f}"
+            )
+
+    # ── Identity check: original == simplified → geometric error == 0 ──────
+    print()
+    print("Identity check (simplified == original with indices → all geometric errors ≈ 0):")
+    traj = trajs[0]
+    pts  = traj[['lat', 'lon']].values
+    idx  = list(range(len(traj)))
+    m    = compute_all_metrics(traj, pts, idx)
+    geometric_keys = ['hausdorff_distance', 'average_pte', 'frechet_distance', 'ped', 'sed']
+    all_zero = True
+    for key in geometric_keys:
+        val = m.get(key, float('nan'))
+        status = "✓" if abs(val) < 1e-3 else "✗"
+        if abs(val) >= 1e-3:
+            all_zero = False
+        print(f"  {status} {key}: {val:.6f} m")
+    print(f"  {'✓' if all_zero else '✗'} turn_preservation = {m.get('turn_preservation', 'N/A')}")
+    print(f"  {'✓' if all_zero else '✗'} stop_preservation = {m.get('stop_preservation', 'N/A')}")
 

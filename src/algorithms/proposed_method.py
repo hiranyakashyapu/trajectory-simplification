@@ -36,8 +36,8 @@ Why it handles irregular sampling and noise better:
 import numpy as np
 import pandas as pd
 from typing import Union, Tuple, List, Dict
-from scipy import stats
 from src.algorithms.baseline_algorithms import haversine_distance, point_to_line_distance
+from src.utils.config import STOP_SPEED_THRESHOLD_MS, MIN_STOP_DURATION_S
 
 
 def compute_turn_score(trajectory: pd.DataFrame, 
@@ -104,8 +104,8 @@ def compute_turn_score(trajectory: pd.DataFrame,
 
 
 def compute_stop_score(trajectory: pd.DataFrame,
-                       stop_threshold: float = 1.0,
-                       min_duration: float = 30.0) -> np.ndarray:
+                       stop_threshold: float = STOP_SPEED_THRESHOLD_MS,
+                       min_duration: float = MIN_STOP_DURATION_S) -> np.ndarray:
     """
     Compute stop significance score for each point.
     
@@ -312,9 +312,13 @@ def proposed_simplification(trajectory: pd.DataFrame,
             'irregular': 0.2
         }
     
-    # Normalize weights
+    # Normalize weights (if all weights are 0, fall back to uniform importance)
     total_weight = sum(weights.values())
-    weights = {k: v / total_weight for k, v in weights.items()}
+    if total_weight > 0:
+        weights = {k: v / total_weight for k, v in weights.items()}
+    else:
+        # geo_only or similar: no semantic scoring, rely on geometric refinement
+        weights = {k: 0.0 for k in weights}
     
     # Compute component scores
     turn_scores = compute_turn_score(trajectory)
@@ -399,33 +403,34 @@ def proposed_simplification(trajectory: pd.DataFrame,
 
 
 if __name__ == "__main__":
-    # Example usage
-    import pandas as pd
-    
-    # Create sample trajectory with turns and stops
-    n = 200
-    trajectory = pd.DataFrame({
-        'lat': np.concatenate([
-            np.linspace(0, 1, n//4),
-            np.linspace(1, 1, n//4),  # Stop region
-            np.linspace(1, 2, n//4),
-            np.linspace(2, 2, n//4)   # Another stop
-        ]) + np.random.normal(0, 0.01, n),
-        'lon': np.concatenate([
-            np.linspace(0, 0, n//4),
-            np.linspace(0, 1, n//4),  # Turn
-            np.linspace(1, 1, n//4),
-            np.linspace(1, 2, n//4)   # Turn
-        ]) + np.random.normal(0, 0.01, n),
-        'timestamp': pd.date_range('2023-01-01', periods=n, freq='30s')
-    })
-    
+    # Demo on real preprocessed GeoLife (same file as run_experiments.py).
+    import pickle
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    data_file = repo_root / "data" / "processed" / "trajectories.pkl"
+    if not data_file.is_file():
+        raise SystemExit(
+            f"Missing {data_file}. Download GeoLife to data/geolife/ then run:\n"
+            "  python src/utils/preprocess_geolife.py"
+        )
+
+    with open(data_file, "rb") as f:
+        trajectories = pickle.load(f)
+
+    trajectory = next((t for t in trajectories if len(t) >= 100), trajectories[0])
+    meta = []
+    if "user_id" in trajectory.columns:
+        meta.append(f"user={trajectory['user_id'].iloc[0]}")
+    if "file_id" in trajectory.columns:
+        meta.append(f"file={trajectory['file_id'].iloc[0]}")
+    print("Loaded preprocessed GeoLife trajectory" + (f" ({', '.join(meta)})" if meta else ""))
+
     print(f"Original trajectory: {len(trajectory)} points")
-    
-    # Simplify with proposed method
-    budget = 30
+
+    budget = max(30, len(trajectory) // 10)
     simplified, indices = proposed_simplification(trajectory, budget)
-    
+
     print(f"Simplified trajectory: {len(simplified)} points")
     print(f"Compression ratio: {len(trajectory) / len(simplified):.2f}x")
     print(f"Selected indices: {indices[:10]}...{indices[-5:]}")
