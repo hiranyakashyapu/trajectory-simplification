@@ -25,9 +25,10 @@ Analyze the entire GitHub repository and generate a structured, clear, and profe
 
 #Instructions
 
-- Create the report in the following format. 
+Create the report in the following format. 
   
 System Design and Implementation
+  
   System Architecture
   Geolife Data Reading Implementation
   Preprocessing and Coordinate Conversion
@@ -39,12 +40,14 @@ System Design and Implementation
   Programming Language and Libraries
 
 Experiments and Results
+  
   Compression Results
   Error Analysis
   Runtime Performance
   Visual Comparison of Trajectories
 
 Discussion and Analysis
+  
   Analysis of Result
   Reliability of the System
   Innovation of the Project
