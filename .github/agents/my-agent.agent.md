@@ -27,30 +27,30 @@ Analyze the entire GitHub repository and generate a structured, clear, and profe
 
 Create the report in the following format. 
   
-System Design and Implementation
+#System Design and Implementation
   
-  System Architecture
-  Geolife Data Reading Implementation
-  Preprocessing and Coordinate Conversion
-  Outlier Detection Implementation
-  Simplification Algorithm Implementation
-  Error Metrics Implementation
-  User Interface Design
-  Implementation Challenges
-  Programming Language and Libraries
+- System Architecture
+- Geolife Data Reading Implementation
+- Preprocessing and Coordinate Conversion
+- Outlier Detection Implementation
+- Simplification Algorithm Implementation
+- Error Metrics Implementation
+- User Interface Design
+- Implementation Challenges
+- Programming Language and Libraries
 
-Experiments and Results
+#Experiments and Results
   
-  Compression Results
-  Error Analysis
-  Runtime Performance
-  Visual Comparison of Trajectories
+- Compression Results
+- Error Analysis
+- Runtime Performance
+- Visual Comparison of Trajectories
 
-Discussion and Analysis
+#Discussion and Analysis
   
-  Analysis of Result
-  Reliability of the System
-  Innovation of the Project
+- Analysis of Result
+- Reliability of the System
+- Innovation of the Project
 
 #Style Guidelines
 - Use clear, concise English
